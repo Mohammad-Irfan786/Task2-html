@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MarketYard – Crop Price Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      background: #040814;
+      color: #f5f5f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #070d1e;
+      border-bottom: 1px solid #151a2f;
+      padding: 0.9rem 1.4rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.7rem;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .logo {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #4fd28c;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      justify-content: center;
+      flex: 1;
+    }
+
+    .controls select,
+    .controls input {
+      padding: 0.35rem 0.55rem;
+      border-radius: 4px;
+      border: 1px solid #252a40;
+      background: #040814;
+      color: #f5f5f5;
+      font-size: 0.8rem;
+    }
+
+    .controls button {
+      padding: 0.4rem 0.7rem;
+      border-radius: 4px;
+      border: none;
+      background: #4fd28c;
+      color: #041016;
+      font-weight: 600;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .controls button.secondary {
+      background: transparent;
+      color: #d0f7e4;
+      border: 1px solid #2a3450;
+    }
+
+    main {
+      flex: 1;
+      padding: 1rem 1.4rem 1.4rem;
+      display: grid;
+      grid-template-columns: 2.1fr 1.1fr;
+      gap: 1rem;
+    }
+
+    .panel {
+      background: #070d1e;
+      border-radius: 10px;
+      border: 1px solid #151a2f;
+      padding: 0.75rem 0.85rem;
+    }
+
+    h2, h3 {
+      font-size: 1rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+      margin-top: 0.3rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .stat {
+      background: #040814;
+      border-radius: 8px;
+      border: 1px solid #151a2f;
+      padding: 0.45rem 0.5rem;
+      font-size: 0.8rem;
+    }
+
+    .stat-label {
+      color: #a0aac8;
+      font-size: 0.7rem;
+    }
+
+    .stat-value {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .chart-wrapper {
+      background: #040814;
+      border-radius: 8px;
+      border: 1px solid #151a2f;
+      padding: 0.5rem;
+      margin-top: 0.25rem;
+    }
+
+    canvas {
+      max-height: 260px;
+    }
+
+    .side-section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .mini-chart {
+      max-height: 160px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+      margin-top: 0.25rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid #151a2f;
+      padding: 0.3rem 0.25rem;
+      text-align: left;
+    }
+
+    th {
+      font-size: 0.75rem;
+      color: #a0aac8;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 0.05rem 0.35rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      border: 1px solid #2b3550;
+      color: #c5d7ff;
+    }
+
+    .tag-spike {
+      border-color: #ff7a9a;
+      color: #ffd0dd;
+    }
+
+    .tag-drop {
+      border-color: #4fd28c;
+      color: #c4fbe0;
+    }
+
+    footer {
+      padding: 0.7rem 1.4rem;
+      font-size: 0.78rem;
+      text-align: center;
+      color: #a0aac8;
+      background: #070d1e;
+      border-top: 1px solid #151a2f;
+    }
+
+    @media (max-width: 900px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">MarketYard</div>
+
+    <div class="controls">
+      <select id="commoditySelect">
+        <option value="Wheat">Wheat</option>
+        <option value="Rice">Rice</option>
+        <option value="Maize">Maize</option>
+      </select>
+      <select id="regionSelect">
+        <option value="North">North</option>
+        <option value="South">South</option>
+        <option value="East">East</option>
+        <option value="West">West</option>
+      </select>
+      <select id="viewSelect">
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
+      <input id="startDate" type="date" />
+      <input id="endDate" type="date" />
+      <button id="applyBtn">Apply</button>
+      <button id="compareBtn" class="secondary">Compare commodity</button>
+      <button id="exportBtn" class="secondary">Export CSV</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Price trends</h2>
+      <div class="summary-grid">
+        <div class="stat">
+          <div class="stat-label">Commodity / region</div>
+          <div class="stat-value" id="summaryLabel">–</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Latest price</div>
+          <div class="stat-value" id="latestPrice">–</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Change over range</div>
+          <div class="stat-value" id="changeSummary">–</div>
+        </div>
+      </div>
+
+      <div class="chart-wrapper">
+        <canvas id="mainChart"></canvas>
+      </div>
+    </section>
+
+    <aside class="side-section">
+      <div class="panel">
+        <h3>Comparison view</h3>
+        <p style="font-size:0.78rem;color:#a0aac8;">
+          Click “Compare commodity” to overlay another series and see side‑by‑side price trends.
+        </p>
+        <div class="chart-wrapper">
+          <canvas id="compareChart" class="mini-chart"></canvas>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Recent movements</h3>
+        <table id="movementTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Commodity</th>
+              <th>Region</th>
+              <th>Price</th>
+              <th>Signal</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    MarketYard · Mock crop price dashboard for exploring historical commodity prices, trends, and CSV export.
+  </footer>
+
+  <script>
+    // --- Mock price dataset (daily prices for 60 days for 3 commodities x 4 regions) ---
+    // Prices are generated with simple sine + noise for demo.
+    const commodities = ["Wheat", "Rice", "Maize"];
+    const regions = ["North", "South", "East", "West"];
+    const rawData = [];
+
+    (function generateData() {
+      const today = new Date();
+      for (let offset = 59; offset >= 0; offset--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - offset);
+        const dateStr = d.toISOString().slice(0,10);
+        commodities.forEach((cIdxName, ci) => {
+          regions.forEach((rName, ri) => {
+            const base = 1500 + ci * 300 + ri * 80; // base price
+            const seasonal = Math.sin((59-offset)/10 + ci) * 80;
+            const noise = (Math.random() - 0.5) * 40;
+            const price = Math.round(base + seasonal + noise);
+            rawData.push({
+              date: dateStr,
+              commodity: cIdxName,
+              region: rName,
+              price
+            });
+          });
+        });
+      }
+    })();
+
+    // --- Helpers for filtering and aggregating ---
+    function filterData(commodity, region, start, end) {
+      return rawData.filter(row => {
+        return row.commodity === commodity &&
+               row.region === region &&
+               (!start || row.date >= start) &&
+               (!end || row.date <= end);
+      });
+    }
+
+    function aggregate(data, mode) {
+      if (mode === "daily") return data;
+      const groups = {};
+      data.forEach(row => {
+        const key = mode === "weekly" ? weekKey(row.date) : monthKey(row.date);
+        if (!groups[key]) groups[key] = { dateKey: key, sum: 0, count: 0 };
+        groups[key].sum += row.price;
+        groups[key].count += 1;
+      });
+      return Object.values(groups).map(g => ({
+        date: g.dateKey,
+        price: Math.round(g.sum / g.count)
+      }));
+    }
+
+    function weekKey(dateStr) {
+      const d = new Date(dateStr);
+      const onejan = new Date(d.getFullYear(),0,1);
+      const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay()+1)/7);
+      return d.getFullYear() + "-W" + String(week).padStart(2,"0");
+    }
+
+    function monthKey(dateStr) {
+      return dateStr.slice(0,7); // YYYY-MM
+    }
+
+    function computeSummary(series) {
+      if (!series.length) return { latest:null, change:null };
+      const first = series[0].price;
+      const last = series[series.length-1].price;
+      const diff = last - first;
+      const pct = (diff / first) * 100;
+      return { latest: last, change: diff, pct: pct };
+    }
+
+    // --- Chart setup ---
+    let mainChart, compareChart;
+    const mainCtx = document.getElementById("mainChart").getContext("2d");
+    const compareCtx = document.getElementById("compareChart").getContext("2d");
+
+    function buildLineDataset(label, color, series) {
+      return {
+        label,
+        data: series.map(r => ({ x: r.date, y: r.price })),
+        borderColor: color,
+        backgroundColor: color + "44",
+        tension: 0.25,
+        fill: false
+      };
+    }
+
+    function initCharts() {
+      mainChart = new Chart(mainCtx, {
+        type: "line",
+        data: { datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { type: "category", ticks: { color: "#a0aac8", maxTicksLimit: 8 } },
+            y: { ticks: { color: "#a0aac8" } }
+          },
+          plugins: {
+            legend: { labels: { color: "#e2e7ff" } },
+            tooltip: { mode: "index", intersect: false }
+          }
+        }
+      });
+
+      compareChart = new Chart(compareCtx, {
+        type: "line",
+        data: { datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { type: "category", ticks: { color: "#a0aac8", maxTicksLimit: 5 } },
+            y: { ticks: { color: "#a0aac8", display: true } }
+          },
+          plugins: {
+            legend: { labels: { color: "#e2e7ff" } },
+            tooltip: { mode: "index", intersect: false }
+          }
+        }
+      });
+    }
+
+    // --- UI wiring ---
+    const commoditySelect = document.getElementById("commoditySelect");
+    const regionSelect = document.getElementById("regionSelect");
+    const viewSelect = document.getElementById("viewSelect");
+    const startInput = document.getElementById("startDate");
+    const endInput = document.getElementById("endDate");
+    const applyBtn = document.getElementById("applyBtn");
+    const compareBtn = document.getElementById("compareBtn");
+    const exportBtn = document.getElementById("exportBtn");
+
+    const summaryLabel = document.getElementById("summaryLabel");
+    const latestPriceEl = document.getElementById("latestPrice");
+    const changeSummaryEl = document.getElementById("changeSummary");
+    const movementTableBody = document.querySelector("#movementTable tbody");
+
+    function formatCurrency(v) {
+      return "₹" + v.toLocaleString("en-IN");
+    }
+
+    function applyMainView() {
+      const c = commoditySelect.value;
+      const r = regionSelect.value;
+      const view = viewSelect.value;
+      const start = startInput.value;
+      const end = endInput.value;
+
+      const filtered = filterData(c, r, start, end);
+      const aggregated = aggregate(filtered.map(row => ({ date: row.date, price: row.price })), view);
+      mainChart.data.datasets = [buildLineDataset(${c} – ${r}, "#4fd28c", aggregated)];
+      mainChart.data.labels = aggregated.map(p => p.date);
+      mainChart.update();
+
+      const summary = computeSummary(aggregated);
+      summaryLabel.textContent = ${c} • ${r} • ${view};
+      latestPriceEl.textContent = summary.latest ? formatCurrency(summary.latest) : "–";
+      if (summary.latest === null) {
+        changeSummaryEl.textContent = "–";
+      } else {
+        const arrow = summary.change > 0 ? "▲" : summary.change < 0 ? "▼" : "■";
+        const pctStr = summary.pct.toFixed(1) + "%";
+        changeSummaryEl.textContent = ${arrow} ${formatCurrency(Math.abs(summary.change))} (${pctStr});
+      }
+
+      renderMovements();
+      syncCompareChart(); // keep comparison aligned on date range/view
+    }
+
+    function syncCompareChart() {
+      const baseCommodity = commoditySelect.value;
+      const region = regionSelect.value;
+      const view = viewSelect.value;
+      const start = startInput.value;
+      const end = endInput.value;
+
+      // default comparison: Wheat vs Rice vs Maize (except primary)
+      const others = commodities.filter(c => c !== baseCommodity).slice(0,2);
+      const datasets = [];
+
+      others.forEach((c, idx) => {
+        const color = idx === 0 ? "#4fa3ff" : "#ffb84f";
+        const filtered = filterData(c, region, start, end);
+        const aggregated = aggregate(filtered.map(r => ({ date: r.date, price: r.price })), view);
+        datasets.push(buildLineDataset(c, color, aggregated));
+        compareChart.data.labels = aggregated.map(p => p.date);
+      });
+
+      compareChart.data.datasets = datasets;
+      compareChart.update();
+    }
+
+    function renderMovements() {
+      // Identify big daily spikes or drops across all commodities/regions for the last 10 days.
+      const recentDates = Array.from(new Set(rawData.map(r => r.date))).sort().slice(-10);
+      const movements = [];
+
+      recentDates.forEach(date => {
+        commodities.forEach(c => {
+          regions.forEach(r => {
+            const today = rawData.find(row => row.date === date && row.commodity === c && row.region === r);
+            const yesterdayIndex = rawData.findIndex(row => row.date === date && row.commodity === c && row.region === r) - (regions.length * commodities.length);
+            const yesterday = rawData[yesterdayIndex];
+            if (today && yesterday && today.commodity === yesterday.commodity && today.region === yesterday.region) {
+              const diff = today.price - yesterday.price;
+              const pct = (diff / yesterday.price) * 100;
+              if (Math.abs(pct) >= 5) { // threshold
+                movements.push({
+                  date,
+                  commodity: c,
+                  region: r,
+                  price: today.price,
+                  diff,
+                  pct
+                });
+              }
+            }
+          });
+        });
+      });
+
+      movements.sort((a,b) => b.date.localeCompare(a.date));
+      const top = movements.slice(0, 8);
+      movementTableBody.innerHTML = "";
+      top.forEach(m => {
+        const tr = document.createElement("tr");
+        const tagClass = m.diff > 0 ? "tag-spike" : "tag-drop";
+        const label = m.diff > 0 ? "Spike" : "Drop";
+        const sign = m.diff > 0 ? "+" : "−";
+        tr.innerHTML = `
+          <td>${m.date}</td>
+          <td>${m.commodity}</td>
+          <td>${m.region}</td>
+          <td>${formatCurrency(m.price)}</td>
+          <td><span class="tag ${tagClass}">${label} ${sign}${Math.abs(m.pct).toFixed(1)}%</span></td>
+        `;
+        movementTableBody.appendChild(tr);
+      });
+    }
+
+    // CSV export of current main series [web:48][web:54]
+    function exportCurrentCSV() {
+      const ds = mainChart.data.datasets[0];
+      if (!ds || !ds.data.length) {
+        alert("No data to export for the current selection.");
+        return;
+      }
+      const rows = [["date","price"]];
+      ds.data.forEach(p => rows.push([p.x, p.y]));
+      const csv = rows.map(r => r.join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = marketyard_${summaryLabel.textContent.replace(/\\s+/g,"_")}.csv;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Comparison: let user quickly choose another commodity to overlay on main chart.
+    compareBtn.addEventListener("click", () => {
+      const other = prompt("Enter another commodity to compare (Wheat, Rice, Maize):", "Rice");
+      if (!other || !commodities.includes(other)) return;
+
+      const c = other;
+      const r = regionSelect.value;
+      const view = viewSelect.value;
+      const start = startInput.value;
+      const end = endInput.value;
+
+      const filtered = filterData(c, r, start, end);
+      const aggregated = aggregate(filtered.map(row => ({ date: row.date, price: row.price })), view);
+      const color = c === "Rice" ? "#4fa3ff" : "#ffb84f";
+
+      if (mainChart.data.datasets.length === 1) {
+        const base = mainChart.data.datasets[0];
+        mainChart.data.labels = aggregated.map(p => p.date.length === 10 ? p.date : p.date); // keep simple
+        mainChart.data.datasets.push(buildLineDataset(${c} – ${r}, color, aggregated));
+      } else {
+        mainChart.data.datasets[1] = buildLineDataset(${c} – ${r}, color, aggregated);
+      }
+      mainChart.update();
+    });
+
+    exportBtn.addEventListener("click", exportCurrentCSV);
+    applyBtn.addEventListener("click", applyMainView);
+
+    // Initialize date range defaults to last 30 days
+    (function initDateRange() {
+      const allDates = Array.from(new Set(rawData.map(r => r.date))).sort();
+      const end = allDates[allDates.length-1];
+      const start = allDates[Math.max(0, allDates.length-30)];
+      startInput.value = start;
+      endInput.value = end;
+    })();
+
+    initCharts();
+    applyMainView(); // initial render
+  </script>
+</body>
+</html>
