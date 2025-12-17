@@ -286,8 +286,7 @@
   </footer>
 
   <script>
-    // --- Mock price dataset (daily prices for 60 days for 3 commodities x 4 regions) ---
-    // Prices are generated with simple sine + noise for demo.
+    // --- Mock data generation ---
     const commodities = ["Wheat", "Rice", "Maize"];
     const regions = ["North", "South", "East", "West"];
     const rawData = [];
@@ -300,29 +299,24 @@
         const dateStr = d.toISOString().slice(0,10);
         commodities.forEach((cIdxName, ci) => {
           regions.forEach((rName, ri) => {
-            const base = 1500 + ci * 300 + ri * 80; // base price
+            const base = 1500 + ci * 300 + ri * 80;
             const seasonal = Math.sin((59-offset)/10 + ci) * 80;
             const noise = (Math.random() - 0.5) * 40;
             const price = Math.round(base + seasonal + noise);
-            rawData.push({
-              date: dateStr,
-              commodity: cIdxName,
-              region: rName,
-              price
-            });
+            rawData.push({ date: dateStr, commodity: cIdxName, region: rName, price });
           });
         });
       }
     })();
 
-    // --- Helpers for filtering and aggregating ---
+    // --- Helpers ---
     function filterData(commodity, region, start, end) {
-      return rawData.filter(row => {
-        return row.commodity === commodity &&
-               row.region === region &&
-               (!start || row.date >= start) &&
-               (!end || row.date <= end);
-      });
+      return rawData.filter(row =>
+        row.commodity === commodity &&
+        row.region === region &&
+        (!start || row.date >= start) &&
+        (!end || row.date <= end)
+      );
     }
 
     function aggregate(data, mode) {
@@ -348,7 +342,7 @@
     }
 
     function monthKey(dateStr) {
-      return dateStr.slice(0,7); // YYYY-MM
+      return dateStr.slice(0,7);
     }
 
     function computeSummary(series) {
@@ -360,7 +354,7 @@
       return { latest: last, change: diff, pct: pct };
     }
 
-    // --- Chart setup ---
+    // --- Charts ---
     let mainChart, compareChart;
     const mainCtx = document.getElementById("mainChart").getContext("2d");
     const compareCtx = document.getElementById("compareChart").getContext("2d");
@@ -431,6 +425,7 @@
       return "₹" + v.toLocaleString("en-IN");
     }
 
+    // --- MAIN: Apply button behaviour ---
     function applyMainView() {
       const c = commoditySelect.value;
       const r = regionSelect.value;
@@ -439,24 +434,28 @@
       const end = endInput.value;
 
       const filtered = filterData(c, r, start, end);
-      const aggregated = aggregate(filtered.map(row => ({ date: row.date, price: row.price })), view);
-      mainChart.data.datasets = [buildLineDataset(${c} – ${r}, "#4fd28c", aggregated)];
+      const aggregated = aggregate(
+        filtered.map(row => ({ date: row.date, price: row.price })),
+        view
+      );
+
+      mainChart.data.datasets = [buildLineDataset(`${c} – ${r}`, "#4fd28c", aggregated)];
       mainChart.data.labels = aggregated.map(p => p.date);
       mainChart.update();
 
       const summary = computeSummary(aggregated);
-      summaryLabel.textContent = ${c} • ${r} • ${view};
+      summaryLabel.textContent = `${c} • ${r} • ${view}`;
       latestPriceEl.textContent = summary.latest ? formatCurrency(summary.latest) : "–";
       if (summary.latest === null) {
         changeSummaryEl.textContent = "–";
       } else {
         const arrow = summary.change > 0 ? "▲" : summary.change < 0 ? "▼" : "■";
         const pctStr = summary.pct.toFixed(1) + "%";
-        changeSummaryEl.textContent = ${arrow} ${formatCurrency(Math.abs(summary.change))} (${pctStr});
+        changeSummaryEl.textContent = `${arrow} ${formatCurrency(Math.abs(summary.change))} (${pctStr})`;
       }
 
       renderMovements();
-      syncCompareChart(); // keep comparison aligned on date range/view
+      syncCompareChart();
     }
 
     function syncCompareChart() {
@@ -466,14 +465,16 @@
       const start = startInput.value;
       const end = endInput.value;
 
-      // default comparison: Wheat vs Rice vs Maize (except primary)
       const others = commodities.filter(c => c !== baseCommodity).slice(0,2);
       const datasets = [];
 
       others.forEach((c, idx) => {
         const color = idx === 0 ? "#4fa3ff" : "#ffb84f";
         const filtered = filterData(c, region, start, end);
-        const aggregated = aggregate(filtered.map(r => ({ date: r.date, price: r.price })), view);
+        const aggregated = aggregate(
+          filtered.map(r => ({ date: r.date, price: r.price })),
+          view
+        );
         datasets.push(buildLineDataset(c, color, aggregated));
         compareChart.data.labels = aggregated.map(p => p.date);
       });
@@ -483,7 +484,6 @@
     }
 
     function renderMovements() {
-      // Identify big daily spikes or drops across all commodities/regions for the last 10 days.
       const recentDates = Array.from(new Set(rawData.map(r => r.date))).sort().slice(-10);
       const movements = [];
 
@@ -491,20 +491,15 @@
         commodities.forEach(c => {
           regions.forEach(r => {
             const today = rawData.find(row => row.date === date && row.commodity === c && row.region === r);
-            const yesterdayIndex = rawData.findIndex(row => row.date === date && row.commodity === c && row.region === r) - (regions.length * commodities.length);
+            const yesterdayIndex =
+              rawData.findIndex(row => row.date === date && row.commodity === c && row.region === r) -
+              (regions.length * commodities.length);
             const yesterday = rawData[yesterdayIndex];
             if (today && yesterday && today.commodity === yesterday.commodity && today.region === yesterday.region) {
               const diff = today.price - yesterday.price;
               const pct = (diff / yesterday.price) * 100;
-              if (Math.abs(pct) >= 5) { // threshold
-                movements.push({
-                  date,
-                  commodity: c,
-                  region: r,
-                  price: today.price,
-                  diff,
-                  pct
-                });
+              if (Math.abs(pct) >= 5) {
+                movements.push({ date, commodity: c, region: r, price: today.price, diff, pct });
               }
             }
           });
@@ -530,7 +525,6 @@
       });
     }
 
-    // CSV export of current main series [web:48][web:54]
     function exportCurrentCSV() {
       const ds = mainChart.data.datasets[0];
       if (!ds || !ds.data.length) {
@@ -544,12 +538,11 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = marketyard_${summaryLabel.textContent.replace(/\\s+/g,"_")}.csv;
+      link.download = `marketyard_${summaryLabel.textContent.replace(/\s+/g,"_")}.csv`;
       link.click();
       URL.revokeObjectURL(url);
     }
 
-    // Comparison: let user quickly choose another commodity to overlay on main chart.
     compareBtn.addEventListener("click", () => {
       const other = prompt("Enter another commodity to compare (Wheat, Rice, Maize):", "Rice");
       if (!other || !commodities.includes(other)) return;
@@ -561,15 +554,16 @@
       const end = endInput.value;
 
       const filtered = filterData(c, r, start, end);
-      const aggregated = aggregate(filtered.map(row => ({ date: row.date, price: row.price })), view);
+      const aggregated = aggregate(
+        filtered.map(row => ({ date: row.date, price: row.price })),
+        view
+      );
       const color = c === "Rice" ? "#4fa3ff" : "#ffb84f";
 
       if (mainChart.data.datasets.length === 1) {
-        const base = mainChart.data.datasets[0];
-        mainChart.data.labels = aggregated.map(p => p.date.length === 10 ? p.date : p.date); // keep simple
-        mainChart.data.datasets.push(buildLineDataset(${c} – ${r}, color, aggregated));
+        mainChart.data.datasets.push(buildLineDataset(`${c} – ${r}`, color, aggregated));
       } else {
-        mainChart.data.datasets[1] = buildLineDataset(${c} – ${r}, color, aggregated);
+        mainChart.data.datasets[1] = buildLineDataset(`${c} – ${r}`, color, aggregated);
       }
       mainChart.update();
     });
@@ -587,7 +581,8 @@
     })();
 
     initCharts();
-    applyMainView(); // initial render
+    applyMainView();
   </script>
 </body>
 </html>
+
